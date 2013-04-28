@@ -25,6 +25,9 @@ end
 raise ArgumentError, "expecting $RELEASE_DIR, but not found" unless ENV["RELEASE_DIR"]
 GIT_CACHE_ROOT_PATH=Pathname.new(ENV["RELEASE_DIR"]).join('.cache','vcap_git_gems').freeze
 
+def transform_uri(uri)
+  uri.sub(/git@github.com:/, "https://github.com/").sub(/git:\/\/github.com/, "https://github.com")
+end
 # fetch into a per-repo local bare repo to store all objects to speed up
 # repeated clones
 #
@@ -35,7 +38,7 @@ def fetch_into_cache(local_repo, spec)
   unless local_repo.exist?
     local_repo.mkpath
     Dir.chdir(local_repo.to_s) do
-      %x(git clone --bare #{uri} .)
+      %x(git clone --bare #{transform_uri(uri)} .)
     end
   end
   Dir.chdir(local_repo) do
@@ -43,7 +46,7 @@ def fetch_into_cache(local_repo, spec)
     # Git 1.7.3 doesn't set a remote and / or fetch refspecs for bare clones,
     # what a pleasant surprise!
     refspecs = "+refs/heads/*:refs/remotes/origin/*"
-    cmd_fetch = "git fetch --quiet #{uri} #{refspecs}"
+    cmd_fetch = "git fetch --quiet #{transform_uri(uri)} #{refspecs}"
     %x(#{cmd_rev_exist} || #{cmd_fetch} )
   end
 end
@@ -74,6 +77,10 @@ def checkout(spec, path)
     revision = spec.source.options["revision"]
     %x(git reset --hard #{revision})
     if spec.source.submodules
+      file_name = ".gitmodules"
+      text = File.read(file_name).gsub(/git@github.com:/, "https://github.com/")
+        .gsub(/git:\/\/github.com/, "https://github.com")
+      File.open(file_name, "w") { |file| file.puts text}
       %x(git submodule update --init --recursive)
     end
   end
